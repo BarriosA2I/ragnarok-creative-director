@@ -1,0 +1,128 @@
+# ================================================================================
+# RENDER.YAML - RAGNAROK VIDEO PRODUCTION INFRASTRUCTURE
+# ================================================================================
+# Barrios A2I Commercial Video Generation Platform
+#
+# Features:
+# - Persistent disk for video assets (survives container restarts)
+# - WebSocket-optimized web service
+# - Background worker for payment processing
+# - Health checks with proper intervals
+#
+# Deploy: Connect GitHub repo to Render, it auto-detects this file
+# ================================================================================
+
+services:
+  # ===========================================================================
+  # 1. MAIN API SERVER (FastAPI + WebSockets)
+  # ===========================================================================
+  - type: web
+    name: ragnarok-api
+    runtime: python
+    region: ohio
+    plan: starter
+
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+
+    startCommand: |
+      uvicorn api.websocket_server:app \
+        --host 0.0.0.0 \
+        --port $PORT \
+        --workers 1 \
+        --ws-ping-interval 20 \
+        --ws-ping-timeout 30 \
+        --timeout-keep-alive 120
+
+    healthCheckPath: /health
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.6"
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: KIE_API_KEY
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        value: ""
+      - key: LOG_LEVEL
+        value: "INFO"
+      - key: VIDEO_OUTPUT_DIR
+        value: "/var/data/videos"
+      - key: LOGS_DIR
+        value: "/var/data/logs"
+      - key: ENABLE_VOICE_SYNTHESIS
+        value: "false"
+      - key: ENVIRONMENT
+        value: "production"
+
+    disk:
+      name: ragnarok-storage
+      mountPath: /var/data
+      sizeGB: 5
+
+  # ===========================================================================
+  # 2. BACKGROUND WORKER (Payment & Job Processing)
+  # ===========================================================================
+  - type: worker
+    name: ragnarok-worker
+    runtime: python
+    region: ohio
+    plan: starter
+
+    buildCommand: pip install -r requirements.txt
+    startCommand: python workers/payment_worker.py
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.6"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: LOG_LEVEL
+        value: "INFO"
+
+    disk:
+      name: ragnarok-storage
+      mountPath: /var/data
+      sizeGB: 5
+
+  # ===========================================================================
+  # 3. CRON JOB - Daily Cleanup
+  # ===========================================================================
+  - type: cron
+    name: ragnarok-cleanup
+    runtime: python
+    region: ohio
+    plan: starter
+    schedule: "0 3 * * *"
+
+    buildCommand: pip install -r requirements.txt
+    startCommand: python workers/cleanup_old_videos.py
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.6"
+      - key: VIDEO_OUTPUT_DIR
+        value: "/var/data/videos"
+      - key: MAX_AGE_DAYS
+        value: "7"
+
+    disk:
+      name: ragnarok-storage
+      mountPath: /var/data
+      sizeGB: 5
