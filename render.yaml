@@ -71,27 +71,45 @@ services:
       sizeGB: 5
 
   # ===========================================================================
-  # 2. BACKGROUND WORKER (Payment & Job Processing)
+  # 2. V8.0 APEX BACKGROUND ORCHESTRATOR
+  # ===========================================================================
+  # Netflix-grade resilience: Circuit breakers, DLQ, graceful shutdown
   # ===========================================================================
   - type: worker
-    name: ragnarok-worker
+    name: ragnarok-orchestrator
     runtime: python
     region: ohio
     plan: starter
 
-    buildCommand: pip install -r requirements.txt
-    startCommand: python workers/payment_worker.py
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+
+    startCommand: python workers/background_orchestrator.py
 
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.6"
       - key: SUPABASE_URL
         sync: false
-      - key: SUPABASE_KEY
+      - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
-      - key: STRIPE_SECRET_KEY
+      - key: ANTHROPIC_API_KEY
         sync: false
-      - key: STRIPE_WEBHOOK_SECRET
+      - key: KIE_API_KEY
         sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: FROM_EMAIL
+        value: "Barrios A2I <director@barriosa2i.com>"
+      - key: WEBSITE_URL
+        value: "https://barriosa2i.com"
       - key: LOG_LEVEL
         value: "INFO"
+      - key: METRICS_PORT
+        value: "9090"
+
+    disk:
+      name: ragnarok-storage
+      mountPath: /var/data
+      sizeGB: 5
