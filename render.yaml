@@ -90,6 +90,8 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.6"
+      - key: PYTHONPATH
+        value: "/opt/render/project/src"
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
